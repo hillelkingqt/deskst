@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     set: (theme) => ipcRenderer.send('theme:set', theme),
     onUpdate: (callback) => ipcRenderer.on('theme-updated', (_event, theme) => callback(theme)),
   },
-  toggleFullScreen: () => ipcRenderer.send('toggle-full-screen'), // <--- הוסף שורה זו
+  toggleFullScreen: () => ipcRenderer.send('toggle-full-screen'),
   completeOnboarding: () => ipcRenderer.send('onboarding-complete'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSetting: (key, value) => ipcRenderer.send('update-setting', key, value),
@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   confirmReset: () => ipcRenderer.send('confirm-reset-action'),
   cancelReset: () => ipcRenderer.send('cancel-reset-action'),
   checkForUpdates: () => ipcRenderer.send('check-for-updates'),
-    manualCheckForNotifications: () => ipcRenderer.send('manual-check-for-notifications'),
+  manualCheckForNotifications: () => ipcRenderer.send('manual-check-for-notifications'),
   onNotificationCheckStatus: (callback) =>
     ipcRenderer.on('notification-check-status', (_event, result) => callback(result)),
 
@@ -30,7 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startDownloadUpdate: () => ipcRenderer.send('start-download-update'),
   installUpdateNow: () => ipcRenderer.send('install-update-now'),
   closeDownloadWindow: () => ipcRenderer.send('close-download-window'),
-  closeUpdateWindow: () => ipcRenderer.send('close-update-window')
+  closeUpdateWindow: () => ipcRenderer.send('close-update-window'),
+  sendLoginAttempt: (data) => ipcRenderer.send('login-attempt', data), // <--- השורה שהוספת
 });
 
 // A. Added code to read the chat title
