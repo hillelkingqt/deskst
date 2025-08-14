@@ -25,7 +25,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install deps
-        run: npm ci
+        run: npm install
 
       # --publish never כדי לא לפרסם, אבל עדיין יווצרו קבצי ה-updater
       - name: Build macOS (DMG + ZIP + updater files)
@@ -55,7 +55,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install deps
-        run: npm ci
+        run: npm install
 
       - name: Build Windows (EXE + updater files)
         run: npm run build -- --win --publish never
