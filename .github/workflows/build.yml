@@ -23,6 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - run: npm install dmg-license --save-dev
 
       - name: Install deps
         run: npm install
