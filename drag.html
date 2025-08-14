@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Gemini Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- General Setup & Theming --- */
+        :root {
+            --background-primary: #121212;
+            --background-secondary: #1E1E1E;
+            --text-primary: #E0E0E0;
+            --text-secondary: #A0A0A0;
+            --accent-glow: #00BFFF; /* DeepSkyBlue for a vibrant, modern feel */
+            --tooltip-background: #333333;
+        }
+
+        html.light-mode {
+            --background-primary: #ffffff;
+            --background-secondary: #ffffff;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --accent-glow: #007aff;
+            --tooltip-background: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: var(--background-primary);
+            font-family: 'Poppins', sans-serif;
+            overflow: hidden; /* Ensures no scrollbars */
+            color: var(--text-primary);
+        }
+
+        /* --- The Main Drag Bar --- */
+        .top-bar {
+            width: 100%;
+            height: 38px;
+            -webkit-app-region: drag; /* Makes the bar draggable in Electron */
+            background: var(--background-secondary);
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 12px;
+            border-bottom: 1px solid #333;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* --- Animated Chat Title (FIXED FOR BIDI TEXT) --- */
+        #chat-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: calc(100% - 100px); /* Ensure it doesn't overlap buttons */
+            -webkit-app-region: drag; /* Title area is also draggable */
+            animation: fadeIn 1s ease-in-out;
+
+            /* --- FIX START --- */
+            /* These two lines fix the Hebrew/English text rendering issue */
+            direction: rtl; 
+            text-align: right;
+            /* --- FIX END --- */
+        }
+
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Button Container --- */
+        .button-container {
+            display: flex;
+            align-items: center;
+            -webkit-app-region: no-drag; /* Buttons themselves are not draggable */
+        }
+        
+        /* --- Shared Button & Tooltip Styling --- */
+        .icon-button {
+            -webkit-app-region: no-drag;
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative; /* Required for tooltip positioning */
+            margin-left: 6px;
+        }
+
+        .icon-button svg {
+            width: 22px; /* Slightly larger for better visibility */
+            height: 22px;
+            transition: stroke 0.3s ease, transform 0.4s ease;
+            stroke: var(--text-secondary); /* Use stroke for better SVG styling */
+            stroke-width: 1.5; /* Adjusted stroke width for the new icons */
+        }
+
+        /* Tooltip - The "External" Text */
+        .icon-button::before {
+            content: attr(data-tooltip); /* Get text from data-tooltip attribute */
+            position: absolute;
+            bottom: 125%; /* Position above the button */
+            left: 50%;
+            transform: translateX(-50%) translateY(5px); /* Start slightly lower */
+            background: var(--tooltip-background);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none; /* Tooltip should not be interactive */
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        /* --- Hover Animations --- */
+        .icon-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .icon-button:hover svg {
+            stroke: var(--accent-glow); /* Change color on hover */
+            filter: drop-shadow(0 0 5px var(--accent-glow)); /* Add a beautiful glow */
+        }
+
+        /* Show tooltip on hover */
+        .icon-button:hover::before {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0); /* Move it into place */
+        }
+
+        /* Specific animation for the "New Window" button */
+        #new-window-button:hover svg {
+            transform: rotate(90deg);
+        }
+
+        /* Specific animation for the "Settings" button */
+        #settings-button:hover svg {
+            transform: rotate(90deg) scale(1.1);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <span id="chat-title"></span>
+  
+    <div class="button-container">
+        <button id="new-window-button" class="icon-button" data-tooltip="New Chat">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4V20M4 12H20" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+<button id="fullscreen-button" class="icon-button" data-tooltip="Fullscreen">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path class="enter-fullscreen" d="M16 3h5v5M8 3H3v5M16 21h5v-5M8 21H3v-5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path class="exit-fullscreen" d="M21 8V3h-5M3 8V3h5M21 16v5h-5M3 16v5h5" stroke-linecap="round" stroke-linejoin="round" style="display: none;"/>
+        </svg>
+    </button>
+        <button id="settings-button" class="icon-button" data-tooltip="Settings">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.69-1.62-0.92L14.4,2.28c-0.05-0.24-0.27-0.42-0.51-0.42 h-3.8c-0.24,0-0.46,0.18-0.51,0.42l-0.58,2.52C8.41,5.55,7.88,5.86,7.38,6.24l-2.39-0.96c-0.22-0.08-0.47,0-0.59,0.22 l-1.92,3.32c-0.11,0.2-0.06,0.47,0.12,0.61l2.03,1.58C4.02,11.36,4,11.68,4,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.69,1.62,0.92 l0.58,2.52c0.05,0.24,0.27,0.42,0.51,0.42h3.8c0.24,0,0.46-0.18,0.51-0.42l0.58-2.52c0.6-0.23,1.12-0.54,1.62-0.92l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.11-0.2,0.06-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            </button>
+    </div>
+</div>
+
+<script>
+    // This JavaScript logic remains the same as it handles
+    // the core functionality for your Electron app.
+
+    // --- IPC for Settings Button ---
+    if (window.electronAPI) {
+        document.getElementById('settings-button').addEventListener('click', () => {
+            window.electronAPI.openSettingsWindow();
+        });
+    }
+  
+    // --- IPC for Chat Title Updates ---
+    if (window.chatAPI) {
+        window.chatAPI.onTitleUpdate((title) => {
+            const titleElement = document.getElementById('chat-title');
+            if (titleElement) {
+                // Add a little animation when the title changes
+                titleElement.style.animation = 'none';
+                void titleElement.offsetWidth; // Trigger reflow
+                titleElement.style.animation = 'fadeIn 0.5s ease-in-out';
+                titleElement.textContent = title || 'New Chat';
+            }
+        });
+    }
+
+    // --- IPC for New Window Button ---
+    if (window.electronAPI) {
+        document.getElementById('new-window-button').addEventListener('click', () => {
+            window.electronAPI.openNewWindow();
+        });
+    }
+    if (window.electronAPI) {
+        const fullscreenButton = document.getElementById('fullscreen-button');
+        const enterIcon = fullscreenButton.querySelector('.enter-fullscreen');
+        const exitIcon = fullscreenButton.querySelector('.exit-fullscreen');
+
+        fullscreenButton.addEventListener('click', () => {
+            window.electronAPI.toggleFullScreen();
+
+            // Toggle the icon and tooltip locally
+            const isEnteringFullscreen = enterIcon.style.display !== 'none';
+            if (isEnteringFullscreen) {
+                enterIcon.style.display = 'none';
+                exitIcon.style.display = 'block';
+                fullscreenButton.setAttribute('data-tooltip', 'Exit Fullscreen');
+            } else {
+                enterIcon.style.display = 'block';
+                exitIcon.style.display = 'none';
+                fullscreenButton.setAttribute('data-tooltip', 'Fullscreen');
+            }
+        });
+    }
+</script>
+<script>
+// --- Theme Application Logic ---
+function applyTheme(theme) {
+    if (theme === 'light') {
+        document.documentElement.classList.add('light-mode');
+    } else {
+        document.documentElement.classList.remove('light-mode');
+    }
+}
+
+if (window.electronAPI) {
+    window.electronAPI.theme.getResolved().then(applyTheme);
+    window.electronAPI.theme.onUpdate(applyTheme);
+}
+</script>
+
+</body>
+</html>

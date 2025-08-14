@@ -1,0 +1,100 @@
+name: Build & Release (random draft name)
+
+on:
+  push:
+    branches: [ main ]
+    tags:     [ 'v*.*.*' ]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  NODE_VERSION: 20
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install deps
+        run: npm ci
+
+      # --publish never כדי לא לפרסם, אבל עדיין יווצרו קבצי ה-updater
+      - name: Build macOS (DMG + ZIP + updater files)
+        run: npm run build -- --mac --publish never
+
+      - name: Upload mac artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*mac*.yml
+            dist/latest*.yml
+            dist/*.blockmap
+
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build Windows (EXE + updater files)
+        run: npm run build -- --win --publish never
+
+      - name: Upload win artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: win
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/latest*.yml
+            dist/*.blockmap
+
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download mac artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac
+          path: rel/macos
+
+      - name: Download win artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: win
+          path: rel/windows
+
+      # יצירת דרפט עם שם רנדומלי geminidesk-<run id>
+      - name: Create draft release & upload all files
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: geminidesk-${{ github.run_id }}-${{ github.run_attempt }}
+          tag_name: geminidesk-${{ github.run_id }}-${{ github.run_attempt }}
+          files: |
+            rel/macos/**
+            rel/windows/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
