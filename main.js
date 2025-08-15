@@ -369,7 +369,7 @@ async function checkForNotifications(isManualCheck = false) {
 
   try {
     // Avoid cached responses so "no new message" vs. "new message" is always fresh.
-    const response = await fetch('https://latex-r70v.onrender.com/latest-message', {
+    const response = await fetch('https://latex-v25b.onrender.com/latest-message', {
       cache: 'no-cache',
       signal: controller.signal
     });
@@ -1046,7 +1046,7 @@ async function reportErrorToServer(error) {
     if (!error) return;
     console.error('Reporting error to server:', error);
     try {
-        await fetch('https://latex-r70v.onrender.com/error', { // ודא שזו כתובת ה-worker שלך
+        await fetch('https://latex-v25b.onrender.com/error', { // ודא שזו כתובת ה-worker שלך
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1120,7 +1120,7 @@ gemSession.setUserAgent(
 );
 const sendPing = async () => {
     try {
-        await fetch('https://latex-r70v.onrender.com/ping-stats', { // ודא שזו כתובת ה-worker שלך
+        await fetch('https://latex-v25b.onrender.com/ping-stats', { // ודא שזו כתובת ה-worker שלך
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ version: app.getVersion() })
@@ -1382,7 +1382,7 @@ ipcMain.on('request-last-notification', async (event) => {
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const response = await fetch('https://latex-r70v.onrender.com/latest-message', {
+    const response = await fetch('https://latex-v25b.onrender.com/latest-message', {
       cache: 'no-cache', // <-- הוספנו את זה
       signal: controller.signal
     });
